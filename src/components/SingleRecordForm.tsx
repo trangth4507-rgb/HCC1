@@ -6,7 +6,6 @@ interface SingleRecordFormProps {
   record: ProfileRecord;
   onChange: (field: keyof ProfileRecord, value: string) => void;
   onSaveAndClear: () => void;
-  onSaveLocalAndClear: () => void;
   onClearForm: () => void;
   isSaving: boolean;
   editingIndex: number | null;
@@ -17,7 +16,6 @@ export const SingleRecordForm: React.FC<SingleRecordFormProps> = ({
   record,
   onChange,
   onSaveAndClear,
-  onSaveLocalAndClear,
   onClearForm,
   isSaving,
   editingIndex,
@@ -221,7 +219,7 @@ export const SingleRecordForm: React.FC<SingleRecordFormProps> = ({
                 type="text"
                 value={record.sl_bia_so}
                 onChange={(e) => onChange('sl_bia_so', e.target.value)}
-                placeholder="1"
+                placeholder="SL"
                 className="w-full px-2.5 py-1.5 text-sm bg-white border border-slate-300 rounded-lg focus:ring-1 focus:ring-orange-500 outline-none font-semibold text-center"
               />
             </div>
@@ -251,15 +249,15 @@ export const SingleRecordForm: React.FC<SingleRecordFormProps> = ({
         </button>
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-          <button
-            type="button"
-            onClick={onSaveLocalAndClear}
-            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 text-xs font-bold transition shadow-sm cursor-pointer"
-            title="Thêm vào danh sách in mà không gửi Google Sheet"
-          >
-            <PlusCircle className="w-4 h-4 text-orange-400" />
-            <span>+ Lưu Tạm Danh Sách In & Trống Form</span>
-          </button>
+          {editingIndex !== null && (
+            <button
+              type="button"
+              onClick={onCancelEdit}
+              className="px-4 py-2 text-slate-500 hover:text-slate-800 font-medium transition cursor-pointer"
+            >
+              Hủy sửa
+            </button>
+          )}
 
           <button
             type="button"
@@ -270,12 +268,12 @@ export const SingleRecordForm: React.FC<SingleRecordFormProps> = ({
             {isSaving ? (
               <>
                 <RefreshCw className="w-5 h-5 animate-spin" />
-                <span>Đang gửi Google Sheet...</span>
+                <span>Đang xử lý...</span>
               </>
             ) : (
               <>
                 <Save className="w-5 h-5" />
-                <span>{editingIndex !== null ? 'Cập Nhật & Lưu Google Sheet' : 'LƯU GOOGLE SHEET & LÀM TRỐNG FORM'}</span>
+                <span>{editingIndex !== null ? 'CẬP NHẬT HỒ SƠ' : 'LƯU DỮ LIỆU & LÀM TRỐNG FORM'}</span>
               </>
             )}
           </button>

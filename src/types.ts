@@ -21,6 +21,13 @@ export interface ProfileRecord {
   createdAt?: number;
 }
 
+export interface UserProfile {
+  uid: string;
+  email: string;
+  role: 'admin' | 'user';
+  createdAt: number;
+}
+
 export interface SenderConfig {
   nguoi_giao: string;
   ten_don_vi_giao: string;

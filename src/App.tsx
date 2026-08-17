@@ -4,13 +4,17 @@ import { SingleRecordForm } from './components/SingleRecordForm';
 import { SavedRecordsList } from './components/SavedRecordsList';
 import { PrintDocument } from './components/PrintDocument';
 import { DashboardView } from './components/DashboardView';
+import { UserManagementView } from './components/UserManagementView';
 import { SenderConfigModal } from './components/SenderConfigModal';
 import { ProfileRecord, SenderConfig } from './types';
 import { appendRecordToGoogleSheetApi, getGoogleAccessToken } from './services/googleSheetsApi';
 import { Printer, Eye, Edit3, CheckCircle2, AlertCircle, FileSpreadsheet, BarChart3, Lock, LogIn, LogOut, User } from 'lucide-react';
-import { collection, onSnapshot, setDoc, doc, deleteDoc, query, orderBy } from 'firebase/firestore';
-import { signInAnonymously } from 'firebase/auth';
+import { collection, onSnapshot, setDoc, doc, getDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth, db } from './firebase';
+import { createNewUser } from './auth-utils';
+import { Users } from 'lucide-react';
+import { UserProfile } from './types';
 
 enum OperationType {
   CREATE = 'create',
@@ -109,35 +113,86 @@ export default function App() {
     return localStorage.getItem('bhxh_spreadsheet_id') || '';
   });
 
-  const [activeTab, setActiveTab] = useState<'edit' | 'preview' | 'dashboard'>('edit');
+  const [activeTab, setActiveTab] = useState<'edit' | 'preview' | 'dashboard' | 'users'>('edit');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Auth state
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return localStorage.getItem('bhxh_authenticated') === 'true';
-  });
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
+
   const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
 
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        setIsAuthenticated(true);
+        try {
+          const docRef = doc(db, 'users', user.uid);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            setUserProfile(docSnap.data() as UserProfile);
+          } else {
+            // First time logic if needed
+            const newProfile: UserProfile = {
+              uid: user.uid,
+              email: user.email || '',
+              role: 'user', // Default
+              createdAt: Date.now()
+            };
+            await setDoc(docRef, newProfile);
+            setUserProfile(newProfile);
+          }
+        } catch (error) {
+          console.error("Error fetching user profile:", error);
+        }
+      } else {
+        setIsAuthenticated(false);
+        setUserProfile(null);
+        if (activeTab === 'users') {
+          setActiveTab('edit');
+        }
+      }
+      setIsAuthChecking(false);
+    });
+    return () => unsubscribe();
+  }, [activeTab]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (loginUsername === 'adminl' && loginPassword === '78947894') {
-      setIsAuthenticated(true);
-      localStorage.setItem('bhxh_authenticated', 'true');
-      setLoginError('');
+    setLoginError('');
+    const email = `${loginUsername}@bhxh.local`;
+    
+    try {
+      await signInWithEmailAndPassword(auth, email, loginPassword);
       setLoginUsername('');
       setLoginPassword('');
-    } else {
-      setLoginError('Tài khoản hoặc mật khẩu không chính xác.');
+    } catch (err: any) {
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
+        // Bootstrap super admin auto-creation
+        if (loginUsername === 'adminl' && loginPassword === '78947894') {
+          try {
+            await createNewUser(loginUsername, loginPassword, 'admin');
+            await signInWithEmailAndPassword(auth, email, loginPassword);
+            setLoginUsername('');
+            setLoginPassword('');
+            return;
+          } catch (createErr: any) {
+            setLoginError('Lỗi khởi tạo Admin: ' + createErr.message);
+            return;
+          }
+        }
+      }
+      setLoginError('Tài khoản hoặc mật khẩu không chính xác hoặc bạn cần cấu hình Firebase Authentication.');
     }
   };
 
   const handleLogout = async () => {
-    setIsAuthenticated(false);
-    localStorage.removeItem('bhxh_authenticated');
+    await signOut(auth);
   };
 
   useEffect(() => {
@@ -225,11 +280,6 @@ export default function App() {
       return;
     }
 
-    setIsSaving(true);
-    const sheetResult = await sendRecordToGoogleSheet(formRecord);
-    setIsSaving(false);
-
-    // Create copy to add to print batch
     const recordId = formRecord.id || Date.now().toString();
     const recordToSave = {
       ...formRecord,
@@ -238,43 +288,25 @@ export default function App() {
     };
 
     try {
+      // 1. LUÔN LUÔN LƯU DỮ LIỆU LÊN DATABASE NGAY LẬP TỨC
       await setDoc(doc(db, 'records', recordId), recordToSave);
       
-      // Reset form fields to empty
+      // 2. LÀM TRỐNG FORM ĐỂ TIẾP TỤC NHẬP
       setFormRecord(BLANK_RECORD);
       setEditingIndex(null);
-
-      if (sheetResult.success) {
-        showToast('success', 'Đã lưu lên Google Sheet & thêm vào danh sách in! Form đã xóa trống để bạn nhập tiếp.');
-      } else if (sheetResult.reason === 'no_url') {
-        showToast('error', 'Đã lưu vào danh sách in! (Lưu ý: Chưa cài đặt Google Web App URL ở nút bánh răng ⚙️)');
-      } else {
-        showToast('error', 'Đã lưu vào danh sách in nhưng gặp lỗi khi gửi Google Sheet.');
-      }
-    } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, 'records');
-    }
-  };
-
-  // Save locally to print batch AND reset form fields
-  const handleSaveLocalAndClear = async () => {
-    if (!formRecord.ten_don_vi.trim() && !formRecord.ma_ho_so.trim()) {
-      showToast('error', 'Vui lòng nhập Tên đơn vị hoặc Mã hồ sơ trước khi lưu!');
-      return;
-    }
-
-    const recordId = formRecord.id || Date.now().toString();
-    const recordToSave = {
-      ...formRecord,
-      id: recordId,
-      createdAt: formRecord.createdAt || Date.now()
-    };
-
-    try {
-      await setDoc(doc(db, 'records', recordId), recordToSave);
-      setFormRecord(BLANK_RECORD);
-      setEditingIndex(null);
-      showToast('success', 'Đã lưu vào danh sách in! Form đã xóa trống để bạn nhập tiếp.');
+      
+      // 3. ĐỒNG BỘ GOOGLE SHEET CÙNG LÚC ĐÓ
+      setIsSaving(true);
+      sendRecordToGoogleSheet(recordToSave).then((sheetResult) => {
+        setIsSaving(false);
+        if (sheetResult.success) {
+          showToast('success', 'Đã lưu danh sách & đồng bộ Google Sheet thành công! Form đã xóa trống.');
+        } else if (sheetResult.reason === 'no_url') {
+          showToast('success', 'Đã lưu danh sách thành công! (Chưa đồng bộ do thiếu cấu hình Google Sheet ⚙️)');
+        } else {
+          showToast('error', 'Đã lưu danh sách thành công! Tuy nhiên gặp lỗi khi đồng bộ Google Sheet.');
+        }
+      });
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, 'records');
     }
@@ -291,15 +323,24 @@ export default function App() {
   // Remove a saved record
   const handleRemoveRecord = async (index: number) => {
     const recordToRemove = records[index];
-    try {
-      await deleteDoc(doc(db, 'records', recordToRemove.id));
-      showToast('success', 'Đã xóa hồ sơ khỏi danh sách in!');
-      if (editingIndex === index) {
-        setFormRecord(BLANK_RECORD);
-        setEditingIndex(null);
+    if (recordToRemove && recordToRemove.id) {
+      await handleDeleteRecordById(recordToRemove.id, index);
+    }
+  };
+
+  const handleDeleteRecordById = async (id: string, index?: number) => {
+    if (window.confirm('Bạn có chắc chắn muốn xóa hồ sơ này?')) {
+      try {
+        await deleteDoc(doc(db, 'records', id));
+        showToast('success', 'Đã xóa hồ sơ thành công!');
+        // If deleting the record we are currently editing
+        if ((index !== undefined && editingIndex === index) || formRecord.id === id) {
+          setFormRecord(BLANK_RECORD);
+          setEditingIndex(null);
+        }
+      } catch (err) {
+        handleFirestoreError(err, OperationType.DELETE, 'records');
       }
-    } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, 'records');
     }
   };
 
@@ -425,13 +466,20 @@ export default function App() {
               <BarChart3 className="w-3.5 h-3.5 text-emerald-300" />
               <span>Tổng hợp</span>
             </button>
-          </div>
 
-          <div className="hidden md:flex items-center gap-3 text-xs text-orange-300">
-            <span className="flex items-center gap-1.5 font-medium">
-              <span className="w-2.5 h-2.5 rounded-full bg-orange-500 animate-pulse"></span>
-              Nhập xong bấm Lưu → Tự gửi Google Sheet & Xóa trống để nhập tiếp
-            </span>
+            {userProfile?.role === 'admin' && (
+              <button
+                onClick={() => setActiveTab('users')}
+                className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  activeTab === 'users'
+                    ? 'bg-purple-700 text-white shadow-md border border-purple-500/50'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Users className="w-3.5 h-3.5 text-purple-300" />
+                <span>Quản lý User</span>
+              </button>
+            )}
           </div>
 
         </div>
@@ -444,7 +492,11 @@ export default function App() {
         {activeTab === 'edit' && (
           <div className="space-y-6 no-print">
             
-            {!isAuthenticated ? (
+            {isAuthChecking ? (
+              <div className="flex justify-center p-10">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-900"></div>
+              </div>
+            ) : !isAuthenticated ? (
               <div className="max-w-md mx-auto mt-10 bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200">
                 <div className="bg-slate-900 px-6 py-8 text-center border-b border-slate-800 relative">
                   <div className="absolute top-0 left-0 w-full h-1 bg-orange-500"></div>
@@ -549,7 +601,6 @@ export default function App() {
                   record={formRecord}
                   onChange={handleFormFieldChange}
                   onSaveAndClear={handleSaveAndClear}
-                  onSaveLocalAndClear={handleSaveLocalAndClear}
                   onClearForm={handleClearForm}
                   isSaving={isSaving}
                   editingIndex={editingIndex}
@@ -564,6 +615,7 @@ export default function App() {
                   onClearAllRecords={handleClearAllRecords}
                   onPrintAll={handlePrintAll}
                   onSwitchToPreview={() => setActiveTab('preview')}
+                  isAdmin={userProfile?.role === 'admin'}
                 />
               </>
             )}
@@ -578,9 +630,6 @@ export default function App() {
                 <h2 className="text-sm font-bold text-orange-400">
                   Xem Trước {records.length} Mẫu Giấy Giao Nhận BHXH (Khổ A4)
                 </h2>
-                <p className="text-xs text-slate-400">
-                  Toàn bộ dữ liệu nhập vào được căn giữa chuẩn đẹp. Sẵn sàng bấm nút In Hàng Loạt.
-                </p>
               </div>
 
               <button
@@ -610,7 +659,18 @@ export default function App() {
         {/* DASHBOARD MODE */}
         {activeTab === 'dashboard' && (
           <div className="no-print">
-            <DashboardView records={records} />
+            <DashboardView 
+              records={records} 
+              onDeleteRecord={handleDeleteRecordById}
+              isAdmin={userProfile?.role === 'admin'}
+            />
+          </div>
+        )}
+
+        {/* USERS MANAGEMENT MODE */}
+        {activeTab === 'users' && userProfile?.role === 'admin' && (
+          <div className="no-print">
+            <UserManagementView />
           </div>
         )}
 

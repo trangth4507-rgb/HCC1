@@ -9,6 +9,7 @@ interface SavedRecordsListProps {
   onClearAllRecords: () => void;
   onPrintAll: () => void;
   onSwitchToPreview: () => void;
+  isAdmin?: boolean;
 }
 
 export const SavedRecordsList: React.FC<SavedRecordsListProps> = ({
@@ -18,6 +19,7 @@ export const SavedRecordsList: React.FC<SavedRecordsListProps> = ({
   onClearAllRecords,
   onPrintAll,
   onSwitchToPreview,
+  isAdmin = false,
 }) => {
   if (records.length === 0) {
     return (
@@ -66,13 +68,15 @@ export const SavedRecordsList: React.FC<SavedRecordsListProps> = ({
             <span>IN TẤT CẢ ({records.length} MẪU)</span>
           </button>
 
-          <button
-            onClick={onClearAllRecords}
-            className="text-xs text-slate-400 hover:text-rose-400 px-2.5 py-2 rounded-lg transition cursor-pointer"
-            title="Xóa danh sách này để bắt đầu đợt nhập mới"
-          >
-            Xóa danh sách
-          </button>
+          {isAdmin && (
+            <button
+              onClick={onClearAllRecords}
+              className="text-xs text-slate-400 hover:text-rose-400 px-2.5 py-2 rounded-lg transition cursor-pointer"
+              title="Xóa danh sách này để bắt đầu đợt nhập mới"
+            >
+              Xóa danh sách
+            </button>
+          )}
         </div>
       </div>
 
@@ -124,13 +128,15 @@ export const SavedRecordsList: React.FC<SavedRecordsListProps> = ({
                     >
                       <Edit3 className="w-3.5 h-3.5" />
                     </button>
-                    <button
-                      onClick={() => onRemoveRecord(idx)}
-                      className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white transition cursor-pointer"
-                      title="Xóa hồ sơ này khỏi danh sách in"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    {isAdmin && (
+                      <button
+                        onClick={() => onRemoveRecord(idx)}
+                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white transition cursor-pointer"
+                        title="Xóa hồ sơ này khỏi danh sách in"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>
