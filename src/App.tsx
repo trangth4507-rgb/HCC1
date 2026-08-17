@@ -124,24 +124,18 @@ export default function App() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (loginUsername === 'admin' && loginPassword === '7894') {
-      try {
-        await signInAnonymously(auth);
-        setIsAuthenticated(true);
-        localStorage.setItem('bhxh_authenticated', 'true');
-        setLoginError('');
-        setLoginUsername('');
-        setLoginPassword('');
-      } catch (err) {
-        setLoginError('Lỗi xác thực hệ thống: ' + (err as Error).message);
-      }
+    if (loginUsername === 'adminl' && loginPassword === '78947894') {
+      setIsAuthenticated(true);
+      localStorage.setItem('bhxh_authenticated', 'true');
+      setLoginError('');
+      setLoginUsername('');
+      setLoginPassword('');
     } else {
       setLoginError('Tài khoản hoặc mật khẩu không chính xác.');
     }
   };
 
   const handleLogout = async () => {
-    await auth.signOut();
     setIsAuthenticated(false);
     localStorage.removeItem('bhxh_authenticated');
   };
