@@ -1,0 +1,50 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Primitive Helpers
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    function isValidProfileRecord(data) {
+      return data.keys().hasAll(['id', 'createdAt']) &&
+        data.id is string && data.id.size() <= 128 &&
+        (data.get('ma_ho_so', '') is string) &&
+        (data.get('ten_don_vi', '') is string) &&
+        (data.get('dia_chi', '') is string) &&
+        (data.get('sdt', '') is string) &&
+        (data.get('sl_to_roi', '') is string) &&
+        (data.get('ghi_chu_to_roi', '') is string) &&
+        (data.get('sl_bhyt', '') is string) &&
+        (data.get('ghi_chu_bhyt', '') is string) &&
+        (data.get('qd_hoan_tra', '') is string) &&
+        (data.get('qd_thu_hoi', '') is string) &&
+        (data.get('qd_huu_tri', '') is string) &&
+        (data.get('sl_bia_so', '') is string) &&
+        (data.get('ghi_chu_bia_so', '') is string) &&
+        data.createdAt is number;
+    }
+
+    match /records/{recordId} {
+      // Allow public read since the UI presents the list publicly
+      allow read: if true;
+
+      // Allow write if it perfectly matches the schema. Since auth is handled via simple hardcoded local state
+      // in the React app (per user request), we cannot restrict by request.auth.uid here.
+      // But we strictly constrain the data shape.
+      allow create: if isValidId(recordId) && isValidProfileRecord(incoming());
+      
+      // Updates and deletes are not supported in the UI but let's secure them
+      allow update: if isValidId(recordId) && isValidProfileRecord(incoming()) && 
+                    incoming().diff(existing()).affectedKeys().hasOnly(['id', 'ma_ho_so', 'ten_don_vi', 'dia_chi', 'sdt', 'sl_to_roi', 'ghi_chu_to_roi', 'sl_bhyt', 'ghi_chu_bhyt', 'qd_hoan_tra', 'qd_thu_hoi', 'qd_huu_tri', 'sl_bia_so', 'ghi_chu_bia_so', 'createdAt']);
+      
+      allow delete: if isValidId(recordId);
+    }
+  }
+}
