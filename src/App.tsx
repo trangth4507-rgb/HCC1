@@ -8,7 +8,7 @@ import { UserManagementView } from './components/UserManagementView';
 import { SenderConfigModal } from './components/SenderConfigModal';
 import { ProfileRecord, SenderConfig } from './types';
 import { appendRecordToGoogleSheetApi, getGoogleAccessToken } from './services/googleSheetsApi';
-import { Printer, Eye, Edit3, CheckCircle2, AlertCircle, FileSpreadsheet, BarChart3, Lock, LogIn, LogOut, User } from 'lucide-react';
+import { Printer, Eye, Edit3, CheckCircle2, AlertCircle, FileSpreadsheet, BarChart3, Lock, LogIn, LogOut, User, Shield } from 'lucide-react';
 import { collection, onSnapshot, setDoc, doc, getDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth, db } from './firebase';
@@ -75,7 +75,7 @@ const BLANK_RECORD: ProfileRecord = {
   qd_hoan_tra: '',
   qd_thu_hoi: '',
   qd_huu_tri: '',
-  sl_bia_so: '1',
+  sl_bia_so: '',
   ghi_chu_bia_so: '',
 };
 
@@ -135,13 +135,18 @@ export default function App() {
           const docRef = doc(db, 'users', user.uid);
           const docSnap = await getDoc(docRef);
           if (docSnap.exists()) {
-            setUserProfile(docSnap.data() as UserProfile);
+            const data = docSnap.data() as UserProfile;
+            if (user.email === 'adminl@bhxh.local' && data.role !== 'admin') {
+              data.role = 'admin';
+              await setDoc(docRef, data);
+            }
+            setUserProfile(data);
           } else {
             // First time logic if needed
             const newProfile: UserProfile = {
               uid: user.uid,
               email: user.email || '',
-              role: 'user', // Default
+              role: user.email === 'adminl@bhxh.local' ? 'admin' : 'user', // Default or admin if adminl
               createdAt: Date.now()
             };
             await setDoc(docRef, newProfile);
@@ -543,6 +548,15 @@ export default function App() {
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition outline-none"
                       placeholder="Nhập mật khẩu..."
                     />
+                  </div>
+                  
+                  <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg text-xs text-blue-700 flex items-start gap-2">
+                    <Shield className="w-4 h-4 shrink-0 text-blue-500" />
+                    <p>
+                      <strong>Mẹo Quản trị:</strong> Để thêm người dùng mới và phân quyền, hãy đăng nhập bằng tài khoản Admin mặc định:<br/>
+                      Tài khoản: <code className="bg-white px-1.5 py-0.5 rounded text-blue-800 font-bold">adminl</code><br/>
+                      Mật khẩu: <code className="bg-white px-1.5 py-0.5 rounded text-blue-800 font-bold">78947894</code>
+                    </p>
                   </div>
                   
                   <div className="pt-2">
