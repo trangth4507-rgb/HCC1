@@ -550,15 +550,6 @@ export default function App() {
                     />
                   </div>
                   
-                  <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg text-xs text-blue-700 flex items-start gap-2">
-                    <Shield className="w-4 h-4 shrink-0 text-blue-500" />
-                    <p>
-                      <strong>Mẹo Quản trị:</strong> Để thêm người dùng mới và phân quyền, hãy đăng nhập bằng tài khoản Admin mặc định:<br/>
-                      Tài khoản: <code className="bg-white px-1.5 py-0.5 rounded text-blue-800 font-bold">adminl</code><br/>
-                      Mật khẩu: <code className="bg-white px-1.5 py-0.5 rounded text-blue-800 font-bold">78947894</code>
-                    </p>
-                  </div>
-                  
                   <div className="pt-2">
                     <button
                       type="submit"
